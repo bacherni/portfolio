@@ -1,0 +1,312 @@
+---
+title: "Regression Data BA"
+author: "Niklas Bacher"
+date: "2023-09-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+### Load packages and import prepared data from Python
+
+```{r, message=FALSE}
+pacman::p_load(tidyverse, stargazer, nnet, extrafont, thematic, effects, car, reshape2)
+loadfonts()
+```
+
+```{r}
+reg_data <- read.csv("regression_data.csv")
+```
+
+```{r}
+reg_data <- reg_data %>%
+  mutate(type_of_violence = as.factor(type_of_violence),
+         type_of_violence = relevel(type_of_violence, ref = "one-sided"),
+         fatalities_log = log(fatalities),
+         year = as.factor(year),
+         country = as.factor(country)) %>% 
+  filter(!country %in% c("CPV","COM", "MUS", "STP","SYC"))# Filter Island Nations
+```
+
+
+
+### Model 1 - 2 (Fatalities on remoteness)
+
+```{r}
+h1_data <- reg_data %>% 
+  filter(fatalities > 0)
+```
+
+```{r}
+model1 <- lm(fatalities_log ~ remoteness_nat, data = h1_data)
+#summary(model1)
+
+model2 <- lm(fatalities_log ~ remoteness_nat + mountains_mean + bdist2 + nlights_calib_mean + excluded + country + year, data = h1_data)
+
+#summary(model2)
+```
+
+```{r warning=FALSE}
+#stargazer(model1, model2, title = "Regression output for Hypothesis 1", model.names = TRUE, omit = c("country", "year"))
+```
+
+
+
+### Model 3 - 4 (type of violence on remoteness (Multinomial Logistic Regression))
+
+```{r}
+h2_data <- reg_data %>% 
+  filter(fatalities > 0)
+```
+
+```{r}
+model3 <- multinom(type_of_violence ~ remoteness_nat, data = h2_data)
+#summary(model3)
+
+model4 <- multinom(type_of_violence ~ remoteness_nat + mountains_mean + bdist2 + nlights_calib_mean + excluded + year + country, data = h2_data)
+#summary(model4)
+```
+
+```{r}
+#stargazer(model3, model4, title = "Regression output for Hypothesis 2",  omit = c("country", "year"))
+```
+
+```{r}
+coefficients_model3 <- coef(model3)
+selected_coefficients_model3 <- coefficients_model3[1:2,2]
+odds_ratios_model3 <- exp(selected_coefficients_model3)
+odds_ratios_model3
+
+coefficients_model4 <- coef(model4)
+selected_coefficients_model4 <- coefficients_model4[1:2,2]
+odds_ratios_model4 <- exp(selected_coefficients_model4)
+odds_ratios_model4
+```
+
+
+
+### Model 5 - 6 (Fatalities on type of conflict)
+
+```{r}
+h3_data <- reg_data %>% 
+  filter(fatalities > 0)
+```
+
+```{r}
+model5 <- lm(fatalities_log ~ type_of_violence, data = h3_data)
+#summary(model5)
+
+model6 <- lm(fatalities_log ~ type_of_violence + mountains_mean + bdist2 + nlights_calib_mean + excluded + year + country, data = h3_data)
+#summary(model6)
+```
+
+```{r warning=FALSE}
+#stargazer(model5, model6, title = "Regression output for Hypothesis 3",  omit = c("country", "year"))
+```
+
+
+
+### Descriptive Statistics
+
+```{r}
+# Descripitve Statistics Table
+descriptive_data <- reg_data %>% 
+  select(fatalities, remoteness_nat, remoteness_reg, mountains_mean, bdist2, nlights_calib_mean, excluded)
+
+#stargazer(descriptive_data, type = "latex",
+    #     summary.stat = c("n", "mean", "median", "min", "max"),
+       #   title = "Descriptive Statistics")
+```
+`
+
+```{r message=FALSE}
+# Linegraph - Conflicts per year by conflict
+aggregate_data <- reg_data %>%
+  group_by(year, type_of_violence) %>%
+  summarise(conflicts_count = n(), .groups = 'drop')
+
+ggplot(aggregate_data, aes(x = year, y = conflicts_count, group = type_of_violence, color = type_of_violence)) +
+  geom_line(linewidth = 1) +
+  theme_minimal(base_size = 12,
+                base_family = "LM Roman 10") +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_line(linewidth = 0.5, linetype = 2),
+    plot.title.position = "plot",
+    legend.title = element_blank(),
+    legend.position = "bottom",
+    legend.text = element_text(face = 'bold')
+  ) + 
+  labs(title = "Number of conflicts per year grouped by conflict type",
+       x = "Year",
+       y = element_blank(),
+       color = "Conflict Type",
+       caption = "Source: UCDP GED") +
+  scale_color_manual(values = thematic::okabe_ito(3))
+```
+
+```{r}
+# Barchart - Top 10 countries
+aggregate_data <- reg_data %>%
+  group_by(country) %>%
+  summarise(conflicts_count = n(), .groups = 'drop') %>% 
+  filter(conflicts_count > 2000) %>% 
+  arrange(conflicts_count) %>% 
+  mutate(country = factor(country, levels = country)) 
+
+ggplot(aggregate_data, aes(x = conflicts_count, y = country)) +
+  geom_col(fill = thematic::okabe_ito(1)) +
+  geom_text(
+    aes(label = conflicts_count),hjust = 1.15, size = 3, color = "white"
+  ) +
+  theme_minimal(
+    base_family = "LM Roman 10"
+  ) +
+  labs(
+    x = element_blank(),
+    y = element_blank(),
+    title = 'The 10 most conflict-affected countries in Africa between 1989 and 2022'
+  ) +
+  theme(
+    panel.grid = element_blank(),
+    plot.title.position = 'plot',
+    axis.text.y = element_text(face = 'bold', size = 11)
+  ) +
+  scale_x_continuous(
+    breaks = NULL,
+    expand = expansion(mult = c(0,0.01))
+  ) 
+
+```
+
+
+```{r}
+# Test in wie vielen Ländern keine Konflikte passiert sind
+unique_countries_reg_data <- unique(reg_data$GID_0)
+all_countries_africa <- c('DZA', 'AGO', 'BEN', 'BWA', 'BFA', 'BDI', 'CPV', 'CMR', 'CAF', 'TCD', 'COM', 'COD', 'COG', 'CIV', 'DJI', 'EGY', 'GNQ', 'ERI', 'SWZ', 'ETH', 'GAB', 'GMB', 'GHA', 'GIN', 'GNB', 'KEN', 'LSO', 'LBR', 'LBY', 'MDG', 'MWI', 'MLI', 'MRT', 'MUS', 'MAR', 'MOZ', 'NAM', 'NER', 'NGA', 'RWA', 'STP', 'SEN', 'SYC', 'SLE', 'SOM', 'ZAF', 'SSD', 'SDN', 'TZA', 'TGO', 'TUN', 'UGA', 'ZMB', 'ZWE')
+
+setdiff(all_countries_africa, unique_countries_reg_data)
+```
+CPV: Kap Verde
+COM: Komoren
+EGY: Ägypten
+GNQ: Äquatorialguinea
+GAB: Gabun
+MDG: Madagaskar
+MWI: Malawi
+MUS: Mauritius
+STP: São Tomé und Príncipe
+SYC: Seychellen
+
+
+
+### Basic Assumption Tests
+
+```{r}
+test_data <- reg_data %>% 
+  filter(fatalities > 0)
+```
+
+```{r}
+# Variance Inflation Factor
+test_model <- lm(fatalities_log ~ remoteness_nat + + type_of_violence + mountains_mean + bdist2 + nlights_calib_mean + excluded + year + country, data = test_data)
+
+vif(test_model)
+```
+
+```{r}
+# Outlier Check
+test_data_melted <- test_data %>% 
+  mutate("Travel time to capital" = log(remoteness_nat),
+         "Distance to border" = log(bdist2),
+         "Nighttime light" = log(nlights_calib_mean)) %>% 
+  rename("Fatalities (log)" = fatalities_log,
+         "Mountainous %" = mountains_mean,
+         "Excluded ethnic groups" = excluded) %>%
+   select("Fatalities (log)","Travel time to capital","Distance to border","Nighttime light","Fatalities (log)","Mountainous %","Excluded ethnic groups") %>% 
+  melt()
+
+ggplot(test_data_melted, aes(y=variable, x=value)) +
+  geom_boxplot() +
+  facet_wrap(~ variable, scales = "free") +
+  theme_minimal(
+    base_family = "LM Roman 10"
+  ) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        axis.text.y = element_text(face = 'bold', size = 11),
+        strip.text = element_blank()) +
+  labs(x = element_blank(),
+         y = element_blank())
+
+```
+
+```{r}
+# IIA Assumption
+alt_model1_data <- test_data %>% 
+  filter(type_of_violence != "state-based")
+
+alt_model2_data <- test_data %>% 
+  filter(type_of_violence != "non-state")
+
+alt_model3_data <- test_data %>% 
+  filter(type_of_violence != "one-sided")
+
+
+#iaa_model1 <- multinom(type_of_violence ~ remoteness_nat + mountains_mean + bdist2 + nlights_calib_mean + excluded + year + country, data = alt_model1_data)
+
+#iaa_model2 <- multinom(type_of_violence ~ remoteness_nat + mountains_mean + bdist2 + nlights_calib_mean + excluded + year + country, data = alt_model2_data)
+
+#iaa_model3 <- multinom(type_of_violence ~ remoteness_nat + mountains_mean + bdist2 + nlights_calib_mean + excluded + year + country, data = alt_model3_data)
+
+#stargazer(iaa_model1,iaa_model2,iaa_model3, title = "Regression output for constrained models veryfing IAA assumption",  omit = c("country", "year"))
+```
+
+
+
+### Robustness Tests
+
+```{r}
+logit_data <- reg_data %>% 
+  filter(fatalities > 0) %>% 
+  mutate(state_based = ifelse(type_of_violence == "state-based", 1, 0),
+         one_sided = ifelse(type_of_violence == "one-sided", 1, 0),
+         non_state = ifelse(type_of_violence == "non-state", 1, 0))
+```
+
+```{r}
+# Robustness Model with dichotomous conflict type instead of MLM
+model_state_based <- glm(state_based ~ remoteness_nat, data = logit_data, family = binomial(link = "logit"))
+#summary(model_state_based)
+
+model_state_based_control <- glm(state_based ~ remoteness_nat + mountains_mean + bdist2 + nlights_calib_mean + excluded + year + country, data = logit_data, family = binomial(link = "logit"))
+#summary(model_state_based_control)
+
+#stargazer(model_state_based, model_state_based_control, title = "Regression output for dichotomous conflict type variable",  omit = c("country", "year"), type = "text")
+```
+
+```{r}
+# Robustness Model with excluded extreme violent events to mitigate skewed distribution
+
+threshhold <- quantile(reg_data$fatalities, 0.99)
+
+bottom_99 <- reg_data %>% 
+  filter(fatalities < threshhold,
+         fatalities > 0)
+
+model_bottom99_h1 <- lm(fatalities_log ~ remoteness_nat + mountains_mean + bdist2 + nlights_calib_mean + excluded + year + country, data = bottom_90)
+#summary(model_bottom99_h1)
+
+model_bottom90_h2 <- multinom(type_of_violence ~ remoteness_nat + mountains_mean + bdist2 + nlights_calib_mean + excluded + year + country, data = bottom_90)
+#summary(model_bottom90_h2)
+
+model_bottom90_h3 <- lm(fatalities_log ~ type_of_violence + mountains_mean + bdist2 + nlights_calib_mean + excluded + year + country, data = bottom_90)
+#summary(model_bottom90_h3)
+
+#stargazer(model_bottom99_h1, model_bottom90_h3, model_bottom90_h2, title = "Regression Output Excluding the Top 1% Deadliest Conflict Events",  omit = c("country", "year"))
+```
+
+
