@@ -19,7 +19,7 @@ Replication of Brady et al. (2017) on moral contagion using Reddit data.
 
 ---
 
-### 3. [Research Project – Disease Outbreaks, State Capacity & Protests](./diseases-protest)
+### 3. [Research Project – Disease Outbreaks, State Capacity & Protests](./disease-protests)
 Integration of zoonotic disease and protest data into a spatially disaggregated database.  
 **Methods:** SQL, R, spatial panel data  
 **Keywords:** political instability, public health, complex systems
