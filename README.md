@@ -26,4 +26,11 @@ Integration of zoonotic disease and protest data into a spatially disaggregated 
 
 ---
 
+### 4. [Term Project – Cascading Failures in Power Grids](./power-grid-replication)
+Replication of Schäfer et al (2019) on transient dynamics in disturbances of power grids.
+**Methods:** Python, Networks 
+**Keywords:** power grids, cascading failures
+
+---
+
 **Contact:** [niklas.bacher@uni.konstanz.de](mailto:niklas.bacher@uni-konstanz.de)
